@@ -12,7 +12,8 @@ type Config struct {
 }
 
 const configFilename = "/.gatorconfig.json"
-const projectPath = "/Workspace/blog-aggregator"
+
+// const projectPath = "/Workspace/blog-aggregator"
 
 func getConfigFilePath() (string, error) {
 	// Construct the file path
@@ -21,7 +22,9 @@ func getConfigFilePath() (string, error) {
 		// log.Fatal(err)
 		return "", err
 	}
-	return homeDir + projectPath + configFilename, nil
+	return homeDir + configFilename, nil
+
+	// return homeDir + projectPath + configFilename, nil
 }
 
 func Read() Config {
