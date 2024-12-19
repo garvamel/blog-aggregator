@@ -1,4 +1,4 @@
-module github.com/garvamel/blog-aggregator
+module github.com/giapoldo/blog-aggregator
 
 go 1.23.4
 

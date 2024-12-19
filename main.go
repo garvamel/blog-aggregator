@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/garvamel/blog-aggregator/internal/config"
-	"github.com/garvamel/blog-aggregator/internal/database"
+	"github.com/giapoldo/blog-aggregator/internal/config"
+	"github.com/giapoldo/blog-aggregator/internal/database"
 	_ "github.com/lib/pq"
 )
 
@@ -56,8 +56,11 @@ func main() {
 	cmds.register("reset", handlerReset)
 	cmds.register("users", handlerListUsers)
 	cmds.register("agg", handlerAgg)
-	cmds.register("addfeed", handlerAddFeed)
+	cmds.register("addfeed", middlewareLoggedIn(handlerAddFeed))
 	cmds.register("feeds", handlerFeeds)
+	cmds.register("follow", middlewareLoggedIn(handlerFollow))
+	cmds.register("following", middlewareLoggedIn(handlerFollowing))
+	cmds.register("unfollow", middlewareLoggedIn(handlerUnfollow))
 
 	if len(os.Args) < 2 {
 

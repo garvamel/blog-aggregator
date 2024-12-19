@@ -10,7 +10,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/garvamel/blog-aggregator/internal/database"
+	"github.com/giapoldo/blog-aggregator/internal/database"
 	"github.com/google/uuid"
 )
 
@@ -88,29 +88,14 @@ func handlerAgg(s *state, cmd command) error {
 	return nil
 }
 
-func handlerAddFeed(s *state, cmd command) error {
+func handlerAddFeed(s *state, cmd command, user database.User) error {
 
 	if l := len(cmd.args); l < 2 {
 		return fmt.Errorf("Enter a name and url for the feed")
 	}
 
-	username := s.cfg.CurrentUserName
 	name := cmd.args[0]
 	url := cmd.args[1]
-
-	user, err := s.db.GetUser(context.Background(), username)
-	if err == sql.ErrNoRows {
-		// Current user should exist, create it if not
-		fmt.Println("Current user not set, add one first")
-		return err
-	} else if err != nil {
-		fmt.Println(err)
-		return err
-	}
-
-	if user.Name != username {
-		return fmt.Errorf("Database returned a different user")
-	}
 
 	feed, err := s.db.CreateFeed(context.Background(), database.CreateFeedParams{
 		ID:        uuid.New(),
@@ -122,6 +107,18 @@ func handlerAddFeed(s *state, cmd command) error {
 	})
 	if err != nil {
 		fmt.Println("Feed entry creation failed")
+		return err
+	}
+
+	_, err = s.db.CreateFeedFollows(context.Background(), database.CreateFeedFollowsParams{
+		ID:        uuid.New(),
+		CreatedAt: feed.CreatedAt,
+		UpdatedAt: feed.UpdatedAt,
+		UserID:    feed.UserID,
+		FeedID:    feed.ID,
+	})
+	if err != nil {
+		fmt.Println("Feed_follow entry creation failed")
 		return err
 	}
 
