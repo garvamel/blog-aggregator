@@ -8,6 +8,7 @@ import (
 	"html"
 	"io"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/giapoldo/blog-aggregator/internal/database"
@@ -77,15 +78,124 @@ func fetchFeed(ctx context.Context, feedURL string) (*RSSFeed, error) {
 
 func handlerAgg(s *state, cmd command) error {
 
-	feed, err := fetchFeed(context.Background(), "https://www.wagslane.dev/index.xml")
+	if l := len(cmd.args); l < 1 {
+		fmt.Println("This command requires a time interval")
+	}
+
+	time_between_reqs := cmd.args[0]
+
+	req_interval, err := time.ParseDuration(time_between_reqs)
+	if err != nil {
+		fmt.Println("Not an time interval string (1s, 1m, 1h)")
+		return err
+	}
+
+	fmt.Printf("Collecting feeds every: %s\n", time_between_reqs)
+
+	ticker := time.NewTicker(req_interval)
+	for ; ; <-ticker.C {
+		err := scrapeFeeds(s)
+		if err != nil {
+			fmt.Println(err)
+			return err
+		}
+	}
+	// feed, err := fetchFeed(context.Background(), "https://www.wagslane.dev/index.xml")
+
+	// fmt.Println(feed)
+	return nil
+}
+
+func scrapeFeeds(s *state) error {
+
+	feed, err := s.db.GetNextFeedToFetch(context.Background())
 
 	if err != nil {
 		fmt.Println(err)
 		return err
 	}
 
-	fmt.Println(feed)
+	updated_fetched_feed, err := s.db.MarkFetchedFeed(context.Background(), database.MarkFetchedFeedParams{
+		ID: feed.ID,
+		LastFetchedAt: sql.NullTime{
+			Time:  time.Now(),
+			Valid: true,
+		},
+		UpdatedAt: time.Now(),
+	})
+
+	if err != nil {
+		fmt.Println(err)
+		return err
+	}
+
+	rss_feed, err := fetchFeed(context.Background(), updated_fetched_feed.Url)
+	if err != nil {
+		fmt.Println(err)
+		return err
+	}
+	fmt.Println(rss_feed.Channel.Item[0].PubDate)
+	for _, fd := range rss_feed.Channel.Item {
+		pubTime, err := time.Parse(time.RFC1123Z, fd.PubDate)
+		if err != nil {
+			fmt.Println(err)
+			return err
+		}
+		_, err = s.db.CreatePost(context.Background(), database.CreatePostParams{
+			ID:          uuid.New(),
+			CreatedAt:   updated_fetched_feed.CreatedAt,
+			UpdatedAt:   updated_fetched_feed.UpdatedAt,
+			Title:       sql.NullString{String: fd.Title, Valid: true},
+			Description: sql.NullString{String: fd.Description, Valid: true},
+			PublishedAt: sql.NullTime{Time: pubTime, Valid: true},
+			FeedID:      feed.ID,
+		})
+		if err == sql.ErrTxDone {
+		} else if err != nil {
+			fmt.Println(err)
+			return nil
+		}
+	}
+
+	// fmt.Println(rss_feed.Channel.Title)
+	// for _, feeds := range rss_feed.Channel.Item {
+	// 	fmt.Printf("  * %s\n", feeds.Title)
+	// }
+
 	return nil
+}
+
+func handlerBrowse(s *state, cmd command) error {
+
+	var limit int
+	var err error
+
+	if l := len(cmd.args); l < 1 {
+		limit = 2
+	} else {
+		limit, err = strconv.Atoi(cmd.args[0])
+		if err != nil {
+			fmt.Println("Conversion")
+
+			fmt.Println(err)
+			return err
+		}
+	}
+
+	posts, err := s.db.GetPosts(context.Background(), int32(limit))
+	if err != nil {
+		fmt.Println("GetPost")
+
+		fmt.Println(err)
+		return err
+	}
+
+	for _, post := range posts {
+		fmt.Println(post)
+	}
+
+	return nil
+
 }
 
 func handlerAddFeed(s *state, cmd command, user database.User) error {
